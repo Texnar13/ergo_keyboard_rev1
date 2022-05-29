@@ -5,9 +5,9 @@
 // --------------------------------------------------------------------------------
 
 // сдвиговые регистры вывода  
-#define LEFT_OUT_DATA  6
-#define LEFT_OUT_LATCH 8
-#define LEFT_OUT_CLOCK 9
+#define OUT_DATA  6
+#define OUT_LATCH 8
+#define OUT_CLOCK 9
 
 // сдвиговый регистр ввода (<) левой клавиатуры
 #define LEFT_SCAN_DATA 10
@@ -20,41 +20,52 @@
 #define RIGHT_SCAN_SHLATCH 12
 
 
-// запись с данными одной кнопки
-struct KeyData {
-  KeyboardKeycode symbol;
-  boolean isChecked;  
-  byte funcNumber;  
-  
-  KeyData(KeyboardKeycode newSymbol, byte func = 0){
-    this -> symbol = newSymbol;
-    this -> isChecked = false;
-    this -> funcNumber = func;
-  }
-};
+// координаты текущей кнопки в массиве
+int8_t chousenKeyX = -1;// int8_t  1 байт  -128… 127
+int8_t chousenKeyY = -1;
 
-// https://github.com/NicoHood/HID/blob/master/src/KeyboardLayouts/ImprovedKeylayouts.h#L61
-// таблица значений клавиш
-KeyData keysDefinition[12][8] = {
+// массив с состояниями нажатых клавиш
+boolean keysState[12][8]= {
   // таблица значений для левой руки (<)  
-  { KeyData(KEY_ESC),        KeyData(KEY_1),            KeyData(KEY_2),            KeyData(KEY_3),            KeyData(KEY_4),           KeyData(KEY_5),          NULL,                   NULL                          },
-  { KeyData(KEY_TAB),        KeyData(KEY_Q),            KeyData(KEY_W),            KeyData(KEY_E),            KeyData(KEY_R),           KeyData(KEY_T),          NULL,                   NULL                          },
-  { KeyData(KEY_LEFT_SHIFT), KeyData(KEY_A),            KeyData(KEY_S),            KeyData(KEY_D),            KeyData(KEY_F),           KeyData(KEY_G),          NULL,                   NULL                          },
-  { KeyData(KEY_LEFT_CTRL),  KeyData(KEY_Z),            KeyData(KEY_X),            KeyData(KEY_C),            KeyData(KEY_V),           KeyData(KEY_B),          KeyData(KEY_DELETE),    KeyData(KEY_DELETE)           },
-  { NULL,                    NULL,                      KeyData(KEY_LEFT_ALT),     KeyData(KEY_LEFT_WINDOWS), KeyData(KEY_SPACE),       KeyData(KEY_ENTER),      KeyData(KEY_INSERT),    KeyData(KEY_INSERT)           },
-                                                                                       
+  {false, false, false, false, false, false, false, false},
+  {false, false, false, false, false, false, false, false},
+  {false, false, false, false, false, false, false, false},
+  {false, false, false, false, false, false, false, false},
+  {false, false, false, false, false, false, false, false},
+  
   // таблица значений для правой руки (>)                                                                                                       
-  { NULL,                    KeyData(KEY_6),            KeyData(KEY_7),            KeyData(KEY_8),            KeyData(KEY_9),           KeyData(KEY_0),          NULL,                    NULL                         },
-  { NULL,                    KeyData(KEY_Y),            KeyData(KEY_U),            KeyData(KEY_I),            KeyData(KEY_O),           KeyData(KEY_P),          KeyData(KEY_LEFT_BRACE), KeyData(KEY_RIGHT_BRACE),    },
-  { NULL,                    KeyData(KEY_H),            KeyData(KEY_J),            KeyData(KEY_K),            KeyData(KEY_L),           KeyData(KEY_SEMICOLON),  KeyData(KEY_QUOTE),      KeyData(KEY_BACKSLASH)       },
-  { KeyData(KEY_RIGHT),      KeyData(KEY_N),            KeyData(KEY_M),            KeyData(KEY_COMMA),        KeyData(KEY_PERIOD),      KeyData(KEY_SLASH),      KeyData(KEY_MINUS),      KeyData(KEY_EQUAL)           },
-  { KeyData(KEY_UP),         KeyData(KEY_SPACE),        KeyData(KEY_ENTER),        KeyData(KEY_RIGHT_SHIFT),  KeyData(KEY_BACKSPACE),   KeyData(KEY_DELETE),     NULL,                    NULL                         },
-  { KeyData(KEY_DOWN),       NULL,                      NULL,                      NULL,                      NULL,                     NULL,                    NULL,                    NULL                         },
-  { KeyData(KEY_LEFT),       NULL,                      NULL,                      NULL,                      NULL,                     NULL,                    NULL,                    NULL                         }
+  {false, false, false, false, false, false, false, false},
+  {false, false, false, false, false, false, false, false},
+  {false, false, false, false, false, false, false, false},
+  {false, false, false, false, false, false, false, false},
+  {false, false, false, false, false, false, false, false},
+  {false, false, false, false, false, false, false, false},
+  {false, false, false, false, false, false, false, false}
 };
 
-// KeyData(KEY_ERROR_UNDEFINED, 1); KeyData(KEY_MENU)KeyData(KEY_RIGHT_SHIFT)
-// есть нигде не использующаяся клавиша, можно назнаить ее под макросы, paus/break KEY_PAUSE  
+// массив значений нажатых клавиш
+// https://github.com/NicoHood/HID/blob/master/src/KeyboardLayouts/ImprovedKeylayouts.h#L61
+KeyboardKeycode keyCodes[12][8]= {
+  // таблица значений для левой руки (<)  
+  {KEY_ESC,        KEY_1,         KEY_2,        KEY_3,            KEY_4,     KEY_5,     KEY_RESERVED, KEY_RESERVED       },
+  {KEY_TAB,        KEY_Q,         KEY_W,        KEY_E,            KEY_R,     KEY_T,     KEY_RESERVED, KEY_RESERVED       },
+  {KEY_LEFT_SHIFT, KEY_A,         KEY_S,        KEY_D,            KEY_F,     KEY_G,     KEY_RESERVED, KEY_RESERVED       },
+  {KEY_LEFT_CTRL,  KEY_Z,         KEY_X,        KEY_C,            KEY_V,     KEY_B,     KEY_DELETE,   KEY_DELETE         },
+  {KEY_RESERVED,   KEY_RESERVED,  KEY_LEFT_ALT, KEY_LEFT_WINDOWS, KEY_SPACE, KEY_ENTER, KEY_INSERT,   KEY_INSERT         },
+  
+  // таблица значений для правой руки (>)                                                                                                       
+  {KEY_RESERVED,   KEY_6,        KEY_7,        KEY_8,         KEY_9,           KEY_0,          KEY_RESERVED,   KEY_RESERVED    },
+  {KEY_RESERVED,   KEY_Y,        KEY_U,        KEY_I,         KEY_O,           KEY_P,          KEY_LEFT_BRACE, KEY_RIGHT_BRACE,},
+  {KEY_RESERVED,   KEY_H,        KEY_J,        KEY_K,         KEY_L,           KEY_SEMICOLON,  KEY_QUOTE,      KEY_BACKSLASH   },
+  {KEY_RIGHT,      KEY_N,        KEY_M,        KEY_COMMA,     KEY_PERIOD,      KEY_SLASH,      KEY_MINUS,      KEY_EQUAL       },
+  {KEY_UP,         KEY_SPACE,    KEY_ENTER,    KEY_BACKSPACE, KEY_RIGHT_SHIFT, KEY_DELETE,     KEY_RESERVED,   KEY_RESERVED    },
+  {KEY_DOWN,       KEY_RESERVED, KEY_RESERVED, KEY_RESERVED,  KEY_RESERVED,    KEY_RESERVED,   KEY_RESERVED,   KEY_RESERVED    },
+  {KEY_LEFT,       KEY_RESERVED, KEY_RESERVED, KEY_RESERVED,  KEY_RESERVED,    KEY_RESERVED,   KEY_RESERVED,   KEY_RESERVED    }
+};
+
+
+// KEY_ERROR_UNDEFINED KEY_MENU  pause/break KEY_PAUSE 
+// есть нигде не использующаяся клавиша, можно назнаить ее под макросы 
 
 // --------------------------------------------------------------------------------
 // ----------  ----------
@@ -62,12 +73,12 @@ KeyData keysDefinition[12][8] = {
 
 void setup() {
   // для регистра вывода 
-  pinMode(LEFT_OUT_DATA, OUTPUT);
-  pinMode(LEFT_OUT_LATCH, OUTPUT);
-  pinMode(LEFT_OUT_CLOCK, OUTPUT);
-  digitalWrite(LEFT_OUT_DATA, LOW);
-  digitalWrite(LEFT_OUT_LATCH, LOW);
-  digitalWrite(LEFT_OUT_CLOCK, LOW);
+  pinMode(OUT_DATA, OUTPUT);
+  pinMode(OUT_LATCH, OUTPUT);
+  pinMode(OUT_CLOCK, OUTPUT);
+  digitalWrite(OUT_DATA, LOW);
+  digitalWrite(OUT_LATCH, LOW);
+  digitalWrite(OUT_CLOCK, LOW);
   
   // для регистра ввода (<) левой клавиатуры 
   pinMode(LEFT_SCAN_DATA, INPUT);
@@ -131,9 +142,9 @@ void loop() {
   // пять секунд
   if(deltaTime < 15000){
     delay(10);
-  }else if(deltaTime < 30000){
+  } else if(deltaTime < 30000){
     delay(30);
-  }else{
+  } else {
     delay(60);
   }
 }
@@ -149,10 +160,8 @@ byte xPoz;
 byte yPoz;
 byte arrayYLeftPoz;
 byte arrayYRightPoz;
-
-// буфферы для для уменьшения количества обращений к данным
+// буффер состояния нажатия текущей клавиши
 boolean keyPressStateBuffer;
-KeyData* currentKeyLink; 
 
 void loopRoutine(){
 
@@ -161,16 +170,15 @@ void loopRoutine(){
   // выводим поочередно единицу на каждый из разрядов регистра
   for (xPoz = 0; xPoz < 8; xPoz++)  {
     
-    // запрещаем вывод данных на пины регистра вывода
-    digitalWrite(LEFT_OUT_LATCH, LOW);
-    
     // отправляем один бит данных (самый первый единица)
-    digitalWrite(LEFT_OUT_DATA, (xPoz==0));
+    digitalWrite(OUT_DATA, (xPoz==0));
     // тактируем каждую отправку через clock
-    digitalWrite(LEFT_OUT_CLOCK, HIGH);
-    digitalWrite(LEFT_OUT_CLOCK, LOW);  
+    digitalWrite(OUT_CLOCK, HIGH);
+    digitalWrite(OUT_CLOCK, LOW);  
     // разрешаем вывод данных на пины регистра вывода
-    digitalWrite(LEFT_OUT_LATCH, HIGH);   
+    digitalWrite(OUT_LATCH, HIGH);  
+    // запрещаем вывод данных на пины регистра вывода
+    digitalWrite(OUT_LATCH, LOW); 
 
     // --- регистр ввода ---- считываем биты из регистра ввода, ища нажатые клавиши в этой колонке
     
@@ -180,7 +188,7 @@ void loopRoutine(){
     digitalWrite(LEFT_SCAN_SHLATCH, HIGH);
     digitalWrite(RIGHT_SCAN_SHLATCH, HIGH);  
   
-    // пропускаем первый разряд регистров(т.к. он никуда не подключены)
+    // пропускаем первый разряд регистров(т.к. он никуда не подключен)
     digitalWrite(LEFT_SCAN_CLOCK, LOW);
     digitalWrite(RIGHT_SCAN_CLOCK, LOW);
     digitalWrite(LEFT_SCAN_CLOCK, HIGH);
@@ -203,8 +211,9 @@ void loopRoutine(){
         // --- обрабатываем нажатие и отпускание клавиш ----
         // нажатие конкретной клавиши
         keyPressStateBuffer = digitalRead(LEFT_SCAN_DATA);
-        // извлекаем адресс текущей клавиши из массива
-        currentKeyLink = &keysDefinition[arrayYLeftPoz][xPoz];
+        // запоминаем адресс текущей клавиши из массива
+    chousenKeyX = xPoz;
+    chousenKeyY = arrayYLeftPoz;
    
         // экстренное отключение
         //if(xPoz == 3 && arrayYLeftPoz == 4 && keyPressStateBuffer) {/*disableFlag = true;*/ BootKeyboard.releaseAll();}
@@ -220,8 +229,9 @@ void loopRoutine(){
       // --- обрабатываем нажатие и отпускание клавиш ----
       // нажатие конкретной клавиши
       keyPressStateBuffer = digitalRead(RIGHT_SCAN_DATA);
-      // извлекаем адресс текущей клавиши из массива
-      currentKeyLink = &keysDefinition[arrayYRightPoz][xPoz];
+      // запоминаем адресс текущей клавиши из массива
+      chousenKeyX = xPoz;
+      chousenKeyY = arrayYRightPoz;
     
       editKeyboardState();
       
@@ -236,24 +246,26 @@ void loopRoutine(){
 
 
 void editKeyboardState(){
+  
   // если состояние клавиши изменилось
-  if((*currentKeyLink).isChecked != keyPressStateBuffer ){
+  if(keysState[chousenKeyY][chousenKeyX] != keyPressStateBuffer ){
     // инвертируем внутреннюю переменную
-    (*currentKeyLink).isChecked = keyPressStateBuffer;
+    keysState[chousenKeyY][chousenKeyX] = keyPressStateBuffer;
       
     // нажимаем или отпускаем эту кнопку
-    if((*currentKeyLink).isChecked){
+    if(keysState[chousenKeyY][chousenKeyX]){
       pressedButtonsCount++;
-      BootKeyboard.press((*currentKeyLink).symbol);
+      BootKeyboard.press(keyCodes[chousenKeyY][chousenKeyX]);
     }else{
       pressedButtonsCount--;
-      BootKeyboard.release((*currentKeyLink).symbol);
+      BootKeyboard.release(keyCodes[chousenKeyY][chousenKeyX]);
     }
     // вызываем функции клавиш
-    if((*currentKeyLink).funcNumber != 0){
-      funcPrintScreen((*currentKeyLink).isChecked);  
-    }
+    //if((*currentKeyLink).funcNumber != 0){
+    //  funcPrintScreen(keysState[chousenKeyY][chousenKeyX]);  
+    //}
   }
+  
 }
 
 // --------------------------------------------------------------------------------
@@ -262,31 +274,31 @@ void editKeyboardState(){
 
 
 // --- раздел с отложенными действиями --- 
-boolean areDeferredEvents = false; // отложенные события (общий флаг для упрощения проверок)
-void checkEvents(){
-  if(areDeferredEvents){
-    //areDeferredEvents = false;
-
-
-
-    // для последовательности команд создаем массив клавиш и переменную позиции.
-    //  и переключаем её по мере прохождения. Если последовательность не активна, то в позиции  будет -1
-  }  
-}
-
+//boolean areDeferredEvents = false; // отложенные события (общий флаг для упрощения проверок)
+//void checkEvents(){
+//  if(areDeferredEvents){
+//    //areDeferredEvents = false;
+//
+//
+//
+//    // для последовательности команд создаем массив клавиш и переменную позиции.
+//    //  и переключаем её по мере прохождения. Если последовательность не активна, то в позиции  будет -1
+//  }  
+//}
+//
 // ---------- функции кнопок ----------
 // кстати спец кнопка для текста должна сохранять положение курсора только пока нажата а потом снова сбрасываться к последнему напечатанному симовлу
-void funcPrintScreen(boolean newKeyState){
-  if(newKeyState){
-    BootKeyboard.press(KEY_LEFT_WINDOWS );
-    BootKeyboard.press(KEY_LEFT_SHIFT );
-    BootKeyboard.press(KEY_S);
-  }else{
-    BootKeyboard.release(KEY_S);
-    BootKeyboard.release(KEY_LEFT_SHIFT);
-    BootKeyboard.release(KEY_LEFT_WINDOWS);
-  }
-}
+//void funcPrintScreen(boolean newKeyState){
+//  if(newKeyState){
+//    BootKeyboard.press(KEY_LEFT_WINDOWS );
+//    BootKeyboard.press(KEY_LEFT_SHIFT );
+//    BootKeyboard.press(KEY_S);
+//  }else{
+//    BootKeyboard.release(KEY_S);
+//    BootKeyboard.release(KEY_LEFT_SHIFT);
+//    BootKeyboard.release(KEY_LEFT_WINDOWS);
+//  }
+//}
 
 
   // You can wakeup you PC from sleep.
