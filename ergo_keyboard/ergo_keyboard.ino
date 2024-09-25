@@ -1,4 +1,8 @@
+#pragma once
+#include <Arduino.h>
 #include "HID-Project.h"
+#include "binds.h"
+#include "macro.h"
 
 // --------------------------------------------------------------------------------
 // ----------  ----------
@@ -24,8 +28,12 @@
 int8_t chousenKeyX = -1;// int8_t  1 байт  -128… 127
 int8_t chousenKeyY = -1;
 
-// массив с состояниями нажатых клавиш
-boolean keysState[12][8]= {
+// текущий слой
+int8_t choosenLayer = 0;
+
+// массив с состояниями нажатых клавиш (нужен только для определения нажата физически клавиша или нет)
+// [строка][столбец]
+bool keysState[12][8] = {
   // таблица значений для левой руки (<)  
   {false, false, false, false, false, false, false, false},
   {false, false, false, false, false, false, false, false},
@@ -42,30 +50,6 @@ boolean keysState[12][8]= {
   {false, false, false, false, false, false, false, false},
   {false, false, false, false, false, false, false, false}
 };
-
-// массив значений нажатых клавиш
-// https://github.com/NicoHood/HID/blob/master/src/KeyboardLayouts/ImprovedKeylayouts.h#L61
-KeyboardKeycode keyCodes[12][8]= {
-  // таблица значений для левой руки (<)  
-  {KEY_ESC,        KEY_1,         KEY_2,        KEY_3,            KEY_4,     KEY_5,     KEY_RESERVED, KEY_RESERVED       },
-  {KEY_TAB,        KEY_Q,         KEY_W,        KEY_E,            KEY_R,     KEY_T,     KEY_RESERVED, KEY_RESERVED       },
-  {KEY_LEFT_SHIFT, KEY_A,         KEY_S,        KEY_D,            KEY_F,     KEY_G,     KEY_RESERVED, KEY_RESERVED       },
-  {KEY_LEFT_CTRL,  KEY_Z,         KEY_X,        KEY_C,            KEY_V,     KEY_B,     KEY_DELETE,   KEY_DELETE         },
-  {KEY_RESERVED,   KEY_RESERVED,  KEY_LEFT_ALT, KEY_LEFT_WINDOWS, KEY_SPACE, KEY_ENTER, KEY_INSERT,   KEY_INSERT         },
-  
-  // таблица значений для правой руки (>)                                                                                                       
-  {KEY_RESERVED,   KEY_6,        KEY_7,        KEY_8,         KEY_9,           KEY_0,          KEY_RESERVED,   KEY_RESERVED    },
-  {KEY_RESERVED,   KEY_Y,        KEY_U,        KEY_I,         KEY_O,           KEY_P,          KEY_LEFT_BRACE, KEY_RIGHT_BRACE,},
-  {KEY_RESERVED,   KEY_H,        KEY_J,        KEY_K,         KEY_L,           KEY_SEMICOLON,  KEY_QUOTE,      KEY_BACKSLASH   },
-  {KEY_RIGHT,      KEY_N,        KEY_M,        KEY_COMMA,     KEY_PERIOD,      KEY_SLASH,      KEY_MINUS,      KEY_EQUAL       },
-  {KEY_UP,         KEY_SPACE,    KEY_ENTER,    KEY_BACKSPACE, KEY_RIGHT_SHIFT, KEY_DELETE,     KEY_RESERVED,   KEY_RESERVED    },
-  {KEY_DOWN,       KEY_RESERVED, KEY_RESERVED, KEY_RESERVED,  KEY_RESERVED,    KEY_RESERVED,   KEY_RESERVED,   KEY_RESERVED    },
-  {KEY_LEFT,       KEY_RESERVED, KEY_RESERVED, KEY_RESERVED,  KEY_RESERVED,    KEY_RESERVED,   KEY_RESERVED,   KEY_RESERVED    }
-};
-
-
-// KEY_ERROR_UNDEFINED KEY_MENU  pause/break KEY_PAUSE 
-// есть нигде не использующаяся клавиша, можно назнаить ее под макросы 
 
 // --------------------------------------------------------------------------------
 // ----------  ----------
@@ -109,7 +93,7 @@ void setup() {
 // --------------------------------------------------------------------------------
 
 // флаг экстренного отключения
-boolean disableFlag = false;
+bool disableFlag = false;
 
 // число нажатых кнопок 
 byte pressedButtonsCount = 0; 
@@ -212,8 +196,8 @@ void loopRoutine(){
         // нажатие конкретной клавиши
         keyPressStateBuffer = digitalRead(LEFT_SCAN_DATA);
         // запоминаем адресс текущей клавиши из массива
-    chousenKeyX = xPoz;
-    chousenKeyY = arrayYLeftPoz;
+        chousenKeyX = xPoz;
+        chousenKeyY = arrayYLeftPoz;
    
         // экстренное отключение
         //if(xPoz == 3 && arrayYLeftPoz == 4 && keyPressStateBuffer) {/*disableFlag = true;*/ BootKeyboard.releaseAll();}
@@ -251,56 +235,30 @@ void editKeyboardState(){
   if(keysState[chousenKeyY][chousenKeyX] != keyPressStateBuffer ){
     // инвертируем внутреннюю переменную
     keysState[chousenKeyY][chousenKeyX] = keyPressStateBuffer;
+    
+    // есть ли на данную клавишу макрос
+    if(keysMacros[0][chousenKeyY][chousenKeyX] != 0){
+
+      KeyboardKeycode key = activateMacro(&choosenLayer, keysMacros[0][chousenKeyY][chousenKeyX], keysState[chousenKeyY][chousenKeyX]);
       
-    // нажимаем или отпускаем эту кнопку
-    if(keysState[chousenKeyY][chousenKeyX]){
-      pressedButtonsCount++;
-      BootKeyboard.press(keyCodes[chousenKeyY][chousenKeyX]);
+      if(key != KEY_RESERVED){
+        BootKeyboard.press(key);
+        BootKeyboard.release(key);
+      }
     }else{
-      pressedButtonsCount--;
-      BootKeyboard.release(keyCodes[chousenKeyY][chousenKeyX]);
+
+      // нажимаем или отпускаем эту кнопку
+      if(keysState[chousenKeyY][chousenKeyX]){
+        pressedButtonsCount++;
+        BootKeyboard.press(keyCodes[choosenLayer][chousenKeyY][chousenKeyX]);
+        // отмечаем любое нажатие клавиши
+        wasSomethingPressedOnLayer = true;
+      }else{
+        pressedButtonsCount--;
+        BootKeyboard.release(keyCodes[choosenLayer][chousenKeyY][chousenKeyX]);
+      }
+
     }
-    // вызываем функции клавиш
-    //if((*currentKeyLink).funcNumber != 0){
-    //  funcPrintScreen(keysState[chousenKeyY][chousenKeyX]);  
-    //}
   }
   
 }
-
-// --------------------------------------------------------------------------------
-// ----------  ----------
-// --------------------------------------------------------------------------------
-
-
-// --- раздел с отложенными действиями --- 
-//boolean areDeferredEvents = false; // отложенные события (общий флаг для упрощения проверок)
-//void checkEvents(){
-//  if(areDeferredEvents){
-//    //areDeferredEvents = false;
-//
-//
-//
-//    // для последовательности команд создаем массив клавиш и переменную позиции.
-//    //  и переключаем её по мере прохождения. Если последовательность не активна, то в позиции  будет -1
-//  }  
-//}
-//
-// ---------- функции кнопок ----------
-// кстати спец кнопка для текста должна сохранять положение курсора только пока нажата а потом снова сбрасываться к последнему напечатанному симовлу
-//void funcPrintScreen(boolean newKeyState){
-//  if(newKeyState){
-//    BootKeyboard.press(KEY_LEFT_WINDOWS );
-//    BootKeyboard.press(KEY_LEFT_SHIFT );
-//    BootKeyboard.press(KEY_S);
-//  }else{
-//    BootKeyboard.release(KEY_S);
-//    BootKeyboard.release(KEY_LEFT_SHIFT);
-//    BootKeyboard.release(KEY_LEFT_WINDOWS);
-//  }
-//}
-
-
-  // You can wakeup you PC from sleep.
-  // This might be not supported on all hardware, but on all OS types.
-  //Keyboard.wakeupHost();
