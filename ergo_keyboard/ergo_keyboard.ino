@@ -255,7 +255,11 @@ void editKeyboardState(){
         wasSomethingPressedOnLayer = true;
       }else{
         pressedButtonsCount--;
-        BootKeyboard.release(keyCodes[choosenLayer][chousenKeyY][chousenKeyX]);
+        // отпускаем кнопку со всех слоёв
+        
+        BootKeyboard.release(keyCodes[0][chousenKeyY][chousenKeyX]);
+        BootKeyboard.release(keyCodes[1][chousenKeyY][chousenKeyX]);
+        BootKeyboard.release(keyCodes[2][chousenKeyY][chousenKeyX]);
       }
 
     }
